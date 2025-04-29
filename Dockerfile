@@ -14,6 +14,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Set environment variable for GCP credentials
+# Copy credentials and set environment variable
+COPY summarizerproxy-799529fee5b2.json /app/summarizerproxy-799529fee5b2.json
 ENV GOOGLE_APPLICATION_CREDENTIALS="/app/summarizerproxy-799529fee5b2.json"
 
 # Expose FastAPI port

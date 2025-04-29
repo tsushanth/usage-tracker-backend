@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from pydantic import BaseModel
 from google.cloud import firestore
 from openai import OpenAI, OpenAIError
@@ -90,16 +90,37 @@ async def submit_category_summary(request: Request):
 
 @app.get("/get-summary-history")
 async def get_summary_history():
-    summaries = summaries_collection.stream()
-    result = []
-    for summary in summaries:
-        data = summary.to_dict()
-        result.append({
-            "timestamp": data["timestamp"],
-            "summary": data["summary"]
-        })
-    result.sort(key=lambda x: datetime.strptime(x["timestamp"], "%Y-%m-%d"))
-    return result
+    try:
+        summaries = summaries_collection.stream()
+        result = []
+
+        for summary in summaries:
+            data = summary.to_dict()
+
+            # Validate timestamp and summary keys exist
+            timestamp = data.get("timestamp")
+            summary_data = data.get("summary")
+
+            if not timestamp or not summary_data:
+                continue  # Skip if either field is missing
+
+            try:
+                # Attempt to parse date for sorting
+                parsed_date = datetime.strptime(timestamp, "%Y-%m-%d")
+            except ValueError:
+                continue  # Skip if timestamp is not in valid format
+
+            result.append({
+                "timestamp": timestamp,
+                "summary": summary_data
+            })
+
+        # Sort using parsed datetime for accuracy
+        result.sort(key=lambda x: datetime.strptime(x["timestamp"], "%Y-%m-%d"))
+        return result
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch summary history: {str(e)}")
 
 
 @app.post("/track-usage")
