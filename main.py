@@ -2,7 +2,7 @@ from fastapi import FastAPI, Request, HTTPException
 from pydantic import BaseModel
 from google.cloud import firestore
 from openai import OpenAI, OpenAIError
-from datetime import datetime
+from datetime import datetime, timedelta
 import uuid
 import os
 import re
