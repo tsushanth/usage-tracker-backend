@@ -86,77 +86,63 @@ def is_valid_domain(domain):
 @app.post("/submit-category-summary")
 async def submit_category_summary(request: Request):
     try:
-        # Add error handling for malformed JSON
-        try:
-            data = await request.json()
-        except json.JSONDecodeError:
-            raise HTTPException(status_code=400, detail="Invalid JSON format")
-        
-        timestamp = data.get("timestamp")
+        data = await request.json()
+        timestamp_str = data.get("timestamp")  # Expects ISO format "2025-05-01T12:00:00Z"
         category_summary = data.get("categorySummary", {})
         user_id = data.get("userId")
 
-        if not timestamp or not category_summary or not user_id:
-            return {"error": "Missing required fields: timestamp, categorySummary, or userId"}
+        if not timestamp_str or not category_summary or not user_id:
+            return {"error": "Missing required fields"}
 
-        # Add Firestore error handling
         try:
-            summaries_collection.document(timestamp).set({
-                "timestamp": timestamp,
+            # Parse and store with full timestamp precision
+            timestamp = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
+            day = timestamp.date().isoformat()  # Extract just the date part
+            
+            summaries_collection.document(timestamp_str).set({
+                "timestamp": timestamp_str,
+                "day": day,  # Store date separately for querying
                 "userId": user_id,
                 "summary": category_summary
             })
-        except Exception as e:
-            print(f"Firestore error: {str(e)}")
-            raise HTTPException(status_code=500, detail="Failed to save data")
-
-        return {"status": "success"}
+            
+            return {"status": "success"}
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid timestamp format: {str(e)}")
 
     except Exception as e:
-        print(f"Unexpected error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/get-summary-history")
-async def get_summary_history(userId: str = None):
+async def get_summary_history(day: str, userId: str = None):
     try:
-        summaries = summaries_collection.stream()
+        # Validate date format
+        datetime.strptime(day, "%Y-%m-%d")
+        
+        # Query for the entire day
+        query = summaries_collection.where("day", "==", day)
+        if userId:
+            query = query.where("userId", "==", userId)
+            
+        docs = query.stream()
+        
         result = []
-
-        for summary in summaries:
-            data = summary.to_dict()
-
-            # Validate required fields exist
-            timestamp = data.get("timestamp")
-            summary_data = data.get("summary")
-            doc_user_id = data.get("userId")
-
-            if not timestamp or not summary_data:
-                continue  # Skip if required fields are missing
-
-            # Filter by userId if provided
-            if userId and doc_user_id != userId:
-                continue
-
-            try:
-                # Attempt to parse date for sorting
-                parsed_date = datetime.strptime(timestamp, "%Y-%m-%d")
-            except ValueError:
-                continue  # Skip if timestamp is not in valid format
-
+        for doc in docs:
+            data = doc.to_dict()
             result.append({
-                "timestamp": timestamp,
-                "userId": doc_user_id,  # Include userId in response
-                "summary": summary_data
+                "timestamp": data["timestamp"],
+                "userId": data["userId"],
+                "summary": data["summary"]
             })
-
-        # Sort using parsed datetime for accuracy
-        result.sort(key=lambda x: datetime.strptime(x["timestamp"], "%Y-%m-%d"))
+            
+        # Sort by timestamp
+        result.sort(key=lambda x: x["timestamp"])
         return result
-
+        
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch summary history: {str(e)}")
-
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/track-usage")
 async def track_usage(report: UsageReport):
