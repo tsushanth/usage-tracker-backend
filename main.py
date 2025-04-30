@@ -85,21 +85,36 @@ def is_valid_domain(domain):
 
 @app.post("/submit-category-summary")
 async def submit_category_summary(request: Request):
-    data = await request.json()
-    timestamp = data.get("timestamp")
-    category_summary = data.get("categorySummary", {})
-    user_id = data.get("userId")
+    try:
+        # Add error handling for malformed JSON
+        try:
+            data = await request.json()
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid JSON format")
+        
+        timestamp = data.get("timestamp")
+        category_summary = data.get("categorySummary", {})
+        user_id = data.get("userId")
 
-    if not timestamp or not category_summary or not user_id:
-        return {"error": "Missing required fields: timestamp, categorySummary, or userId"}
+        if not timestamp or not category_summary or not user_id:
+            return {"error": "Missing required fields: timestamp, categorySummary, or userId"}
 
-    summaries_collection.document(timestamp).set({
-        "timestamp": timestamp,
-        "userId": user_id,  # Added userId to Firestore document
-        "summary": category_summary
-    })
+        # Add Firestore error handling
+        try:
+            summaries_collection.document(timestamp).set({
+                "timestamp": timestamp,
+                "userId": user_id,
+                "summary": category_summary
+            })
+        except Exception as e:
+            print(f"Firestore error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to save data")
 
-    return {"status": "success"}
+        return {"status": "success"}
+
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 
 @app.get("/get-summary-history")
