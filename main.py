@@ -5,6 +5,7 @@ from openai import OpenAI, OpenAIError
 from datetime import datetime
 import uuid
 import os
+import re
 import json
 from dotenv import load_dotenv
 load_dotenv()
@@ -43,11 +44,16 @@ async def get_category_mapping(request: Request):
     response = {}
 
     for domain in domains:
-        doc = categories_collection.document(domain).get()
-        if doc.exists:
-            response[domain] = doc.to_dict().get("category", "Uncategorized")
-        else:
-            try:
+        # Skip empty or invalid domains
+        if not domain or domain.strip() == "/":
+            response[domain] = "Uncategorized"
+            continue
+            
+        try:
+            doc = categories_collection.document(domain).get()
+            if doc.exists:
+                response[domain] = doc.to_dict().get("category", "Uncategorized")
+            else:
                 prompt = f"Categorize the domain '{domain}' into one of the following categories: Social Media, Entertainment, Work/Productivity, Shopping, Education, News, Other. Respond with just the category."
 
                 completion = client.chat.completions.create(
@@ -61,15 +67,21 @@ async def get_category_mapping(request: Request):
                 category = completion.choices[0].message.content.strip()
                 if not category:
                     category = "Uncategorized"
-            except OpenAIError as e:
-                print(f"❌ LLM error for domain {domain}: {str(e)}")
-                category = "Uncategorized"
 
-            categories_collection.document(domain).set({"category": category})
-            response[domain] = category
+                categories_collection.document(domain).set({"category": category})
+                response[domain] = category
+                
+        except Exception as e:
+            print(f"❌ Error processing domain {domain}: {str(e)}")
+            response[domain] = "Uncategorized"
 
     return response
 
+def is_valid_domain(domain):
+    if not domain:
+        return False
+    # Simple domain format validation
+    return bool(re.match(r'^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', domain))
 
 @app.post("/submit-category-summary")
 async def submit_category_summary(request: Request):
