@@ -103,7 +103,7 @@ async def submit_category_summary(request: Request):
 
 
 @app.get("/get-summary-history")
-async def get_summary_history():
+async def get_summary_history(userId: str = None):
     try:
         summaries = summaries_collection.stream()
         result = []
@@ -111,12 +111,17 @@ async def get_summary_history():
         for summary in summaries:
             data = summary.to_dict()
 
-            # Validate timestamp and summary keys exist
+            # Validate required fields exist
             timestamp = data.get("timestamp")
             summary_data = data.get("summary")
+            doc_user_id = data.get("userId")
 
             if not timestamp or not summary_data:
-                continue  # Skip if either field is missing
+                continue  # Skip if required fields are missing
+
+            # Filter by userId if provided
+            if userId and doc_user_id != userId:
+                continue
 
             try:
                 # Attempt to parse date for sorting
@@ -126,6 +131,7 @@ async def get_summary_history():
 
             result.append({
                 "timestamp": timestamp,
+                "userId": doc_user_id,  # Include userId in response
                 "summary": summary_data
             })
 
