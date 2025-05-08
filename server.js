@@ -125,6 +125,7 @@ app.post('/track-usage', (req, res) => {
   }
 
   logs[userId].totalCalls += usage.llmCall || 0;
+  
   logs[userId].totalCost += usage.cost || 0;
   logs[userId].lastActive = new Date(timestamp).toISOString();
 
