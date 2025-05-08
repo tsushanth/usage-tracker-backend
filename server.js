@@ -16,7 +16,7 @@ app.use(bodyParser.json());
 const { db } = require('./firebase');
 const categoriesCollection = db.collection('domain_categories');
 const summariesCollection = db.collection('category_summaries');
-const openai = new OpenAI({ apiKey: "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" });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const USAGE_LOG = path.join(process.cwd(), 'usage_log.json');
 if (!fs.existsSync(USAGE_LOG)) fs.writeFileSync(USAGE_LOG, '{}');
