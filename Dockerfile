@@ -1,20 +1,28 @@
-# Use lightweight Python base image
-FROM python:3.9-slim
+FROM node:18-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Copy dependency file
-COPY requirements.txt .
+# Copy package files first
+COPY package*.json ./
+RUN npm ci --only=production
 
-# Install dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Create secrets directory with correct permissions
+RUN mkdir -p secrets && \
+    chown node:node secrets && \
+    chmod 700 secrets
 
-# Copy all project files including API key, main.py, etc.
-COPY . .
+# Copy service account files
+COPY --chown=node:node serviceAccountKey.json serviceAccountKeyFirebase.json ./
+RUN mv *.json secrets/ && \
+    chown node:node secrets/*.json && \
+    chmod 600 secrets/*.json
 
-# Expose FastAPI port
-EXPOSE 8080
+# Copy remaining files
+COPY --chown=node:node . .
 
-# Run the FastAPI app with Uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Security hardening
+RUN apk add --no-cache tini
+
+USER node
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["node", "server.js"]
